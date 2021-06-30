@@ -7,6 +7,9 @@ extern crate diesel;
 
 mod schema;
 
+use std::str::FromStr;
+
+use chrono::{Duration, NaiveDate};
 use diesel::{prelude::*, Connection, SqliteConnection};
 use regex::Regex;
 use schema::items;
@@ -26,7 +29,7 @@ enum State {
     Detail(String, String), // 详情
 }
 
-#[derive(Debug, Serialize, Insertable)]
+#[derive(Debug, Insertable)]
 #[table_name = "items"]
 struct Chengjiao {
     qu: String,
@@ -36,12 +39,13 @@ struct Chengjiao {
     name: String,
     huxing: String,
     floor: String,
-    square: String,
+    floor_number: i32,
+    square: f32,
     structs: String,
-    inner_square: String,
+    inner_square: f32,
     build_type: String,
     direction: String,
-    build_year: String,
+    build_year: i32,
     build_decorate: String,
     build_struct: String,
     gongnuan: String,
@@ -49,16 +53,17 @@ struct Chengjiao {
     dianti: String,
 
     quansu: String,
-    guapai_time: String,
+    guapai_day: Option<NaiveDate>,
     yongtu: String,
     nianxian: String,
     fangquan: String,
 
-    guapai_price: String,
-    chengjiao_zhouqi: String,
-    tiaojia: String,
-    chengjiao_price: String,
-    danjia: String,
+    guapai_price: i32,
+    chengjiao_zhouqi: i32,
+    tiaojia: i32,
+    chengjiao_price: i32,
+    chengjiao_day: Option<NaiveDate>,
+    danjia: i32,
 }
 
 fn insert_item(item: Chengjiao, db: &SqliteConnection) {
@@ -201,9 +206,20 @@ impl Scraper for LianjiaScraper {
                     let name = find_inner_text(".index_h1");
                     info!("find item: {}", name);
 
-                    let number_re = Regex::new(r"[^\d.]").unwrap();
+                    let i32_re = Regex::new(r"[^\d]").unwrap();
+                    let f32_re = Regex::new(r"[^\d.]").unwrap();
 
-                    let to_number = |input: String| number_re.replace_all(&input, "").to_string();
+                    let to_i32 =
+                        |input: String| i32_re.replace_all(&input, "").parse().unwrap_or(0);
+                    let to_f32 =
+                        |input: String| f32_re.replace_all(&input, "").parse().unwrap_or(0.0);
+
+                    let guapai_day = parse_transaction(3);
+                    let guapai_day = NaiveDate::from_str(&guapai_day).ok();
+                    let chengjiao_zhouqi =
+                        to_i32(find_inner_text(".info .msg span:nth-child(2) label"));
+                    let chengjiao_day =
+                        guapai_day.map(|v| v + Duration::days(chengjiao_zhouqi as _));
 
                     return Ok(Some(Self::Output {
                         qu: qu.clone(),
@@ -211,20 +227,21 @@ impl Scraper for LianjiaScraper {
                         url: response.request_url.to_string(),
 
                         name,
-                        guapai_price: find_inner_text(".info .msg span:nth-child(1) label"),
-                        chengjiao_zhouqi: find_inner_text(".info .msg span:nth-child(2) label"),
-                        tiaojia: find_inner_text(".info .msg span:nth-child(3) label"),
-                        chengjiao_price: find_inner_text(".info .dealTotalPrice i"),
-                        danjia: find_inner_text(".info .price b"),
+                        guapai_price: to_i32(find_inner_text(".info .msg span:nth-child(1) label")),
+                        chengjiao_zhouqi,
+                        tiaojia: to_i32(find_inner_text(".info .msg span:nth-child(3) label")),
+                        chengjiao_price: to_i32(find_inner_text(".info .dealTotalPrice i")),
+                        danjia: to_i32(find_inner_text(".info .price b")),
 
                         huxing: parse_base(1),
                         floor: parse_base(2),
-                        square: to_number(parse_base(3)),
+                        floor_number: to_i32(parse_base(2)),
+                        square: to_f32(parse_base(3)),
                         structs: parse_base(4),
-                        inner_square: to_number(parse_base(5)),
+                        inner_square: to_f32(parse_base(5)),
                         build_type: parse_base(6),
                         direction: parse_base(7),
-                        build_year: to_number(parse_base(8)),
+                        build_year: to_i32(parse_base(8)),
                         build_decorate: parse_base(9),
                         build_struct: parse_base(10),
                         gongnuan: parse_base(11),
@@ -232,10 +249,11 @@ impl Scraper for LianjiaScraper {
                         dianti: parse_base(13),
 
                         quansu: parse_transaction(2),
-                        guapai_time: parse_transaction(3),
+                        guapai_day,
                         yongtu: parse_transaction(4),
                         nianxian: parse_transaction(5),
                         fangquan: parse_transaction(6),
+                        chengjiao_day,
                     }));
                 }
             }
