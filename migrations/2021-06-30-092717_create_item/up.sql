@@ -5,7 +5,7 @@ create table if not exists items (
 
   qu text not null,
   zheng text not null,
-  url text not null,
+  url text not null unique,
 
   name text not null,
   huxing text not null,

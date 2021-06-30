@@ -68,6 +68,15 @@ fn insert_item(item: Chengjiao, db: &SqliteConnection) {
     }
 }
 
+fn exist_url(_url: &str, db: &SqliteConnection) -> bool {
+    use schema::items::dsl::*;
+
+    if let Ok(count) = items.filter(url.eq(_url)).count().get_result::<i64>(db) {
+        return count > 0;
+    }
+    return false;
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PageData {
@@ -75,11 +84,13 @@ struct PageData {
     cur_page: i32,
 }
 
-struct LianjiaScraper {}
+struct LianjiaScraper {
+    pub db: SqliteConnection,
+}
 
 impl LianjiaScraper {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(db: SqliteConnection) -> Self {
+        Self { db }
     }
 }
 
@@ -128,7 +139,12 @@ impl Scraper for LianjiaScraper {
 
                     for item in html.select(&list_selector) {
                         if let Some(url) = item.value().attr("href") {
-                            crawler.visit_with_state(url, State::Detail(qu.clone(), zheng.clone()));
+                            if !exist_url(url, &self.db) {
+                                crawler.visit_with_state(
+                                    url,
+                                    State::Detail(qu.clone(), zheng.clone()),
+                                );
+                            }
                         }
                     }
 
@@ -236,14 +252,14 @@ async fn main() -> Result<()> {
     let db = diesel::SqliteConnection::establish(&database_url).expect("connect to database");
 
     let config = CrawlerConfig::default();
-    let mut collector = Collector::new(LianjiaScraper::new(), config);
+    let mut collector = Collector::new(LianjiaScraper::new(db), config);
 
     collector
         .crawler_mut()
         .visit_with_state(INIT_URL, State::Init);
 
     while let Some(Ok(item)) = collector.next().await {
-        insert_item(item, &db);
+        insert_item(item, &collector.scraper().db);
     }
 
     Ok(())
