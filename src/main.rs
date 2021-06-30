@@ -8,6 +8,7 @@ extern crate diesel;
 mod schema;
 
 use diesel::{prelude::*, Connection, SqliteConnection};
+use regex::Regex;
 use schema::items;
 
 use anyhow::Result;
@@ -200,6 +201,10 @@ impl Scraper for LianjiaScraper {
                     let name = find_inner_text(".index_h1");
                     info!("find item: {}", name);
 
+                    let number_re = Regex::new(r"[^\d.]").unwrap();
+
+                    let to_number = |input: String| number_re.replace_all(&input, "").to_string();
+
                     return Ok(Some(Self::Output {
                         qu: qu.clone(),
                         zheng: zheng.clone(),
@@ -214,12 +219,12 @@ impl Scraper for LianjiaScraper {
 
                         huxing: parse_base(1),
                         floor: parse_base(2),
-                        square: parse_base(3),
+                        square: to_number(parse_base(3)),
                         structs: parse_base(4),
-                        inner_square: parse_base(5),
+                        inner_square: to_number(parse_base(5)),
                         build_type: parse_base(6),
                         direction: parse_base(7),
-                        build_year: parse_base(8),
+                        build_year: to_number(parse_base(8)),
                         build_decorate: parse_base(9),
                         build_struct: parse_base(10),
                         gongnuan: parse_base(11),
