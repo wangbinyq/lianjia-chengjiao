@@ -163,7 +163,7 @@ impl Scraper for LianjiaScraper {
                         .to_string()
                     };
                     let parse_base = |n| parse_info("base", n);
-                    let parse_transaction = |n| parse_info("base", n);
+                    let parse_transaction = |n| parse_info("transaction", n);
 
                     let name = find_inner_text(".index_h1");
                     info!("find item: {}", name);
