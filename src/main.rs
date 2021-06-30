@@ -2,6 +2,13 @@
 extern crate log;
 #[macro_use]
 extern crate serde;
+#[macro_use]
+extern crate diesel;
+
+mod schema;
+
+use diesel::{prelude::*, Connection, SqliteConnection};
+use schema::items;
 
 use anyhow::Result;
 use tokio::stream::StreamExt;
@@ -18,7 +25,8 @@ enum State {
     Detail(String, String), // 详情
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Insertable)]
+#[table_name = "items"]
 struct Chengjiao {
     qu: String,
     zheng: String,
@@ -50,6 +58,14 @@ struct Chengjiao {
     tiaojia: String,
     chengjiao_price: String,
     danjia: String,
+}
+
+fn insert_item(item: Chengjiao, db: &SqliteConnection) {
+    use schema::items::dsl::*;
+
+    if let Err(err) = diesel::insert_into(items).values(item).execute(db) {
+        error!("insert into db error: {:?}", err);
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -212,7 +228,12 @@ impl Scraper for LianjiaScraper {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    dotenv::dotenv().ok();
+
     env_logger::init();
+
+    let database_url = std::env::var("DATABASE_URL").expect("database url");
+    let db = diesel::SqliteConnection::establish(&database_url).expect("connect to database");
 
     let config = CrawlerConfig::default();
     let mut collector = Collector::new(LianjiaScraper::new(), config);
@@ -221,10 +242,8 @@ async fn main() -> Result<()> {
         .crawler_mut()
         .visit_with_state(INIT_URL, State::Init);
 
-    let mut wtr = csv::Writer::from_path("./ouput.csv")?;
-
     while let Some(Ok(item)) = collector.next().await {
-        wtr.serialize(item).ok();
+        insert_item(item, &db);
     }
 
     Ok(())

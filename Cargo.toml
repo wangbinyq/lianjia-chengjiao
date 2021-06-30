@@ -6,6 +6,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+diesel = { version = "1.4",  features = ["sqlite", "extras", ]}
+libsqlite3-sys = { version="0.22", features =  ["bundled"]}
 tokio = { version = "0.2", features = ["full"] }
 voyager = "0.1"
 anyhow = "1.0"
@@ -14,3 +16,4 @@ serde_json = "1.0"
 csv = "1.1"
 log = "0.4"
 env_logger = "0.8"
+dotenv = "0.15"
